@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>sgridmon</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css?v=1">
+</head>
+<body>
+
+<!-- Topbar -->
+<div id="topbar">
+  <div id="topbar-logo">sgrid<span>mon</span><span id="demo-badge" class="hidden" title="Synthetic data (SGRIDMON_DEMO)">DEMO</span></div>
+  <div id="topbar-stats">
+    <span class="stat-item"><span class="label">nodes</span><span class="val" id="stat-nodes">—</span></span>
+    <span class="stat-item"><span class="label">sites</span><span class="val" id="stat-sites">—</span></span>
+  </div>
+  <div id="search-wrap">
+    <input id="search-input" type="text" placeholder="Search node…" autocomplete="off">
+    <div id="search-results" class="hidden"></div>
+  </div>
+  <div id="alerts-dropdown-wrap">
+    <button id="alerts-dropdown-btn">Alerts <span id="alerts-dropdown-count">0</span></button>
+    <div id="alerts-dropdown" class="hidden">
+      <div class="alerts-dd-header">
+        <div class="alerts-dd-title" id="alerts-dd-title">Active alerts</div>
+        <div class="alerts-filter-tabs">
+          <button class="filter-tab active" data-sev="all">All</button>
+          <button class="filter-tab critical" data-sev="critical">Critical</button>
+          <button class="filter-tab major" data-sev="major">Major</button>
+          <button class="filter-tab minor" data-sev="minor">Minor</button>
+          <button class="filter-tab" data-sev="notice">Notice</button>
+        </div>
+      </div>
+      <div id="alerts-dd-scroll">
+        <div id="alerts-dropdown-list"></div>
+      </div>
+    </div>
+  </div>
+  <div id="cases-dropdown-wrap">
+    <button id="cases-dropdown-btn">Cases <span id="cases-dropdown-count">0</span></button>
+    <div id="cases-dropdown" class="hidden">
+      <div id="cases-dropdown-list"></div>
+    </div>
+  </div>
+  <div id="layout-switcher">
+    <select id="layout-select">
+      <option value="1">Force physics</option>
+      <option value="2">Radial by site</option>
+      <option value="3">Site columns</option>
+      <option value="6" selected>Site mesh topology</option>
+    </select>
+  </div>
+  <button id="tenants-btn" class="icon-btn" title="Tenants storage usage">👥</button>
+  <button id="inventory-btn" class="icon-btn" title="Hardware inventory">⊞</button>
+  <button id="settings-btn" class="icon-btn" title="User management" style="display:none">⚙</button>
+  <button id="about-btn" class="icon-btn" title="About">?</button>
+  <div id="user-menu-wrap">
+    <button id="user-menu-btn" title="Account">
+      <span id="user-menu-email">—</span>
+    </button>
+    <div id="user-menu" class="hidden">
+      <div class="user-menu-info">
+        <div id="user-menu-info-email"></div>
+        <div id="user-menu-info-role"></div>
+      </div>
+      <button id="user-menu-change-pwd">Change password</button>
+      <button id="user-menu-manage" style="display:none">Manage users</button>
+      <button id="user-menu-logout">Sign out</button>
+    </div>
+  </div>
+  <div id="status-indicator">
+    <div class="status-dot polling" id="ws-dot"></div>
+    <span id="ws-label">connecting…</span>
+  </div>
+</div>
+
+<!-- Charts panel (left side) -->
+<div id="charts-panel">
+  <div id="charts-panel-header">
+    <span>Grid metrics</span>
+    <span id="charts-status" style="color:var(--muted);font-size:10px"></span>
+    <button id="charts-toggle" title="Collapse">‹</button>
+  </div>
+  <div id="charts-range-bar">
+    <button data-range="5m">5m</button>
+    <button data-range="15m">15m</button>
+    <button data-range="1h">1h</button>
+    <button data-range="6h">6h</button>
+    <button data-range="24h" class="active">24h</button>
+    <button data-range="7d">7d</button>
+  </div>
+  <div id="chart-tooltip" class="hidden"></div>
+  <div id="charts-panel-body">
+    <section class="chart-section">
+      <div class="chart-title">S3 ingest by site<span class="chart-now" id="now-ingest-site"></span></div>
+      <canvas id="chart-ingest-site" class="chart-canvas"></canvas>
+      <div class="chart-legend" id="legend-ingest-site"></div>
+    </section>
+    <section class="chart-section">
+      <div class="chart-title">S3 retrieve by site<span class="chart-now" id="now-retrieve-site"></span></div>
+      <canvas id="chart-retrieve-site" class="chart-canvas"></canvas>
+      <div class="chart-legend" id="legend-retrieve-site"></div>
+    </section>
+    <section class="chart-section">
+      <div class="chart-title">ILM queue<span class="chart-now" id="now-ilm"></span></div>
+      <canvas id="chart-ilm" class="chart-canvas"></canvas>
+      <div class="chart-legend" id="legend-ilm"></div>
+    </section>
+    <section class="chart-section">
+      <div class="chart-title">Grid total ingest / retrieve<span class="chart-now" id="now-total"></span></div>
+      <canvas id="chart-total" class="chart-canvas"></canvas>
+      <div class="chart-legend" id="legend-total"></div>
+    </section>
+    <section class="chart-section">
+      <div class="chart-title">Cassandra reaper · 6h<span class="chart-now" id="now-reaper"></span></div>
+      <canvas id="chart-reaper" class="chart-canvas"></canvas>
+      <div class="chart-legend" id="legend-reaper"></div>
+    </section>
+  </div>
+</div>
+<button id="charts-show" title="Show charts panel">›</button>
+
+<!-- Graph -->
+<div id="graph-container"></div>
+
+<!-- Node panel -->
+<div id="node-panel">
+  <div class="panel-header">
+    <div class="panel-header-info">
+      <div id="panel-node-name">—</div>
+      <div id="panel-node-meta">—</div>
+      <div id="panel-node-ip" style="display:none"></div>
+    </div>
+    <span class="health-badge unknown" id="panel-health-badge">unknown</span>
+    <button id="panel-close">✕</button>
+  </div>
+  <div id="panel-body">
+    <!-- Alerts -->
+    <div class="panel-section" id="section-alerts" style="display:none">
+      <div class="panel-section-title">Active Alerts</div>
+      <div id="panel-alerts-list"></div>
+    </div>
+    <!-- Hardware -->
+    <div class="panel-section" id="section-hardware" style="display:none">
+      <div class="panel-section-title">Hardware</div>
+      <div id="hardware-info"></div>
+    </div>
+    <!-- Node notes -->
+    <div class="panel-section" id="section-node-notes">
+      <div class="panel-section-title">Node Notes</div>
+      <div id="node-notes-list"><span class="empty-msg">No notes yet</span></div>
+      <div class="case-add-note" style="margin-top:8px">
+        <textarea id="node-note-input" placeholder="Add a note about this node…" rows="2"></textarea>
+        <button id="node-note-add">Add</button>
+      </div>
+    </div>
+    <!-- Services -->
+    <div class="panel-section" id="section-services">
+      <div class="panel-section-title">Services</div>
+      <div id="services-list"><span class="empty-msg">Loading…</span></div>
+    </div>
+    <!-- Cases -->
+    <div class="panel-section" id="section-cases">
+      <div class="panel-section-title">Open Cases</div>
+      <div id="open-cases-list"><span class="empty-msg">No open cases</span></div>
+      <button class="btn-add-case" id="btn-add-case">+ New Case</button>
+      <div id="new-case-form" style="display:none">
+        <div class="form-row">
+          <label>Title *</label>
+          <input type="text" id="case-title" placeholder="Brief description of the issue">
+        </div>
+        <div class="form-row">
+          <label>Case / Ticket reference</label>
+          <input type="text" id="case-ref" placeholder="e.g. INC0012345">
+        </div>
+        <div class="form-row">
+          <label>Description</label>
+          <textarea id="case-desc" rows="3" placeholder="Symptoms, error messages, steps taken…"></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" id="btn-case-save">Save</button>
+          <button class="btn-secondary" id="btn-case-cancel">Cancel</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div class="panel-section-title">Case History</div>
+        <button class="history-toggle" id="btn-history-toggle">Show closed cases</button>
+        <div id="closed-cases-list" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Alert modal -->
+<div id="alert-modal" class="hidden">
+  <div class="modal-header">
+    <div class="modal-header-title" id="alert-modal-title">Alerts</div>
+    <button id="alert-modal-close">✕</button>
+  </div>
+  <div id="alert-list"></div>
+  <div class="modal-footer">
+    <button class="btn-secondary" id="alert-modal-ok">Close</button>
+  </div>
+</div>
+
+<!-- User management modal -->
+<div id="users-modal" class="hidden">
+  <div class="modal-header">
+    <div class="modal-header-title">User management</div>
+    <button id="users-modal-close">✕</button>
+  </div>
+  <div id="users-list"></div>
+  <div class="users-add">
+    <div class="users-add-title">Add user</div>
+    <div class="users-add-row">
+      <input type="email" id="new-user-email" placeholder="email@example.com">
+      <input type="password" id="new-user-pass" placeholder="password">
+      <select id="new-user-role">
+        <option value="viewer">viewer</option>
+        <option value="admin">admin</option>
+      </select>
+      <button class="btn-primary" id="btn-add-user">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hardware inventory modal -->
+<div id="inventory-modal" class="hidden">
+  <div class="modal-header">
+    <div class="modal-header-title">Hardware inventory</div>
+    <input type="text" id="inv-search" placeholder="Filter…" />
+    <button class="btn-secondary" id="inv-export">Export CSV</button>
+    <button id="inv-modal-close">✕</button>
+  </div>
+  <div id="inventory-table-wrap">
+    <table id="inventory-table">
+      <thead>
+        <tr>
+          <th data-sort="siteName">Site</th>
+          <th data-sort="name">Node</th>
+          <th data-sort="type">Type</th>
+          <th data-sort="health">Health</th>
+          <th data-sort="connected">State</th>
+          <th data-sort="storagePct">Used %</th>
+          <th data-sort="alertCount">Alerts</th>
+          <th data-sort="model">Model</th>
+          <th data-sort="boardSerial">Board S/N</th>
+          <th data-sort="storageSerial">Storage S/N</th>
+          <th data-sort="bios">BIOS</th>
+          <th data-sort="shelves">Shelves</th>
+          <th data-sort="fqdn">FQDN</th>
+          <th data-sort="ip">IP</th>
+        </tr>
+      </thead>
+      <tbody id="inventory-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- About modal -->
+<div id="about-modal" class="hidden">
+  <div class="modal-header">
+    <div class="modal-header-title">About sgridmon</div>
+    <button id="about-modal-close">✕</button>
+  </div>
+  <div id="about-body">
+    <div class="about-logo">sgrid<span>mon</span></div>
+    <p class="about-tagline">StorageGRID management and case monitoring</p>
+    <p class="about-credits">
+      Developed by <strong>Mariano Miretta</strong><br>
+      <span style="color:var(--muted)">Open source (MIT). Not affiliated with or endorsed by NetApp, Inc.</span>
+    </p>
+  </div>
+</div>
+
+<!-- Tenants storage modal -->
+<div id="tenants-modal" class="hidden">
+  <div class="modal-header">
+    <div class="modal-header-title">Tenants storage
+      <span id="tenants-count" style="color:var(--muted);font-weight:400"></span>
+      <span id="tenants-poll-status" style="color:var(--muted);font-weight:400;font-size:11px;margin-left:14px"></span>
+    </div>
+    <input type="text" id="tenants-search" placeholder="Filter by name or id…" />
+    <button class="btn-secondary" id="tenants-export">Export CSV</button>
+    <button id="tenants-modal-close">✕</button>
+  </div>
+  <div id="tenants-table-wrap">
+    <table id="tenants-table">
+      <thead><tr id="tenants-thead-row"></tr></thead>
+      <tbody id="tenants-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Change password modal -->
+<div id="pwd-modal" class="hidden">
+  <div class="modal-header">
+    <div class="modal-header-title">Change password</div>
+    <button id="pwd-modal-close">✕</button>
+  </div>
+  <div style="padding: 14px 18px;">
+    <div class="form-row">
+      <label>Current password</label>
+      <input type="password" id="pwd-current" autocomplete="current-password">
+    </div>
+    <div class="form-row">
+      <label>New password (min 8 characters)</label>
+      <input type="password" id="pwd-new" autocomplete="new-password">
+    </div>
+    <div class="form-row">
+      <label>Confirm new password</label>
+      <input type="password" id="pwd-confirm" autocomplete="new-password">
+    </div>
+    <div id="pwd-error" style="display:none;color:var(--red);font-size:12px;margin-bottom:8px"></div>
+    <div class="form-actions">
+      <button class="btn-primary" id="btn-pwd-save">Update</button>
+      <button class="btn-secondary" id="btn-pwd-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay"></div>
+<div id="toast"></div>
+
+<script src="https://unpkg.com/force-graph@1.43.4/dist/force-graph.min.js"></script>
+<script src="/app.js?v=1"></script>
+</body>
+</html>

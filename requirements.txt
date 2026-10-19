@@ -1,0 +1,12 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+requests>=2.31.0
+urllib3>=2.0.0
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.29.0
+aiosqlite>=0.20.0
+python-dotenv>=1.0.0
+passlib>=1.7.4
+bcrypt<4.1
+itsdangerous>=2.2.0
+python-multipart>=0.0.9

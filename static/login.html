@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>sgridmon · login</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    body { display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .login-box {
+      width: 320px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px 26px;
+      box-shadow: 0 16px 48px rgba(0,0,0,.5);
+    }
+    .login-logo { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    .login-logo span { color: var(--accent); }
+    .login-sub { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 22px; }
+    .login-row { margin-bottom: 12px; }
+    .login-row label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+    .login-row input {
+      width: 100%; padding: 8px 10px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 14px;
+      outline: none; transition: border-color .15s;
+    }
+    .login-row input:focus { border-color: var(--accent); }
+    .login-btn {
+      width: 100%; padding: 9px; margin-top: 8px;
+      background: var(--accent); border: none;
+      border-radius: 6px; color: #fff;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: opacity .15s;
+    }
+    .login-btn:hover { opacity: .9; }
+    .login-btn:disabled { opacity: .5; cursor: default; }
+    .login-error {
+      font-size: 12px; color: var(--red);
+      background: #3d0d0d; border: 1px solid var(--red);
+      border-radius: 6px; padding: 7px 10px;
+      margin-bottom: 12px; display: none;
+    }
+    .login-error.show { display: block; }
+    .login-demo {
+      font-size: 12px; color: #e3b341;
+      border: 1px dashed #e3b341; border-radius: 6px;
+      padding: 7px 10px; margin-bottom: 12px; display: none;
+    }
+    .login-demo.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <div class="login-logo">sgrid<span>mon</span></div>
+    <div class="login-sub">Sign in to continue</div>
+
+    <div class="login-error" id="login-error"></div>
+    <div class="login-demo" id="login-demo"></div>
+
+    <form id="login-form">
+      <div class="login-row">
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="email" autofocus>
+      </div>
+      <div class="login-row">
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="login-btn" id="login-submit">Sign in</button>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const errBox = document.getElementById('login-error');
+    const submitBtn = document.getElementById('login-submit');
+
+    // Demo mode: show (and pre-fill) the demo credentials
+    fetch('/api/meta').then(r => r.json()).then(m => {
+      if (!m.demo || !m.demo_login) return;
+      const box = document.getElementById('login-demo');
+      box.textContent = `Demo mode · ${m.demo_login.email} / ${m.demo_login.password}`;
+      box.classList.add('show');
+      document.getElementById('email').value = m.demo_login.email;
+      document.getElementById('password').value = m.demo_login.password;
+    }).catch(() => {});
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      errBox.classList.remove('show');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Signing in…';
+
+      try {
+        const r = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}));
+          errBox.textContent = data.detail || 'Invalid email or password';
+          errBox.classList.add('show');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Sign in';
+          return;
+        }
+        location.href = '/';
+      } catch (err) {
+        errBox.textContent = 'Network error';
+        errBox.classList.add('show');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign in';
+      }
+    });
+  </script>
+</body>
+</html>

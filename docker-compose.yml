@@ -1,0 +1,54 @@
+# sgridmon — StorageGRID monitor
+#
+#   cp .env.example .env      # then edit it
+#   docker compose up -d --build
+#
+# Demo without a StorageGRID:  SGRIDMON_DEMO=1 docker compose up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sgridmon
+      POSTGRES_USER: sgridmon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sgridmon}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sgridmon"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sgridmon:${POSTGRES_PASSWORD:-sgridmon}@db/sgridmon
+      SGRID_URL: ${SGRID_URL:-https://admin01.grid.example.com}
+      SGRID_USER: ${SGRID_USER:-sgridmon}
+      SGRID_PASS: ${SGRID_PASS:-}
+      SGRID_API_VERSION: ${SGRID_API_VERSION:-4}
+      SGRID_VERIFY_TLS: ${SGRID_VERIFY_TLS:-true}
+      SGRID_CA_BUNDLE: ${SGRID_CA_BUNDLE:-}
+      SGRID_PROXY: ${SGRID_PROXY:-}
+      POLL_INTERVAL: ${POLL_INTERVAL:-60}
+      METRICS_INTERVAL: ${METRICS_INTERVAL:-60}
+      BUCKET_POLL_INTERVAL: ${BUCKET_POLL_INTERVAL:-7200}
+      BUCKET_RETENTION_DAYS: ${BUCKET_RETENTION_DAYS:-90}
+      EC_OVERHEAD: ${EC_OVERHEAD:-1.5}
+      SECRET_KEY: ${SECRET_KEY:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SGRIDMON_DEMO: ${SGRIDMON_DEMO:-0}
+    ports:
+      - "${SGRIDMON_BIND:-127.0.0.1}:${SGRIDMON_PORT:-8090}:8000"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  pgdata:
