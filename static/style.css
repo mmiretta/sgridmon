@@ -357,7 +357,7 @@ tr.bucket-expanded-row td {
   position: fixed;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 92vw; max-width: 1200px;
+  width: 92vw; max-width: 1560px;
   height: 80vh;
   background: var(--surface);
   border: 1px solid var(--border);

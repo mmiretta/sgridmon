@@ -233,6 +233,32 @@ def _fetch_hardware(client: StorageGridClient) -> dict[str, dict]:
     except Exception:
         pass
 
+    # Storage controller firmware (E-Series controller behind SG appliances).
+    # Versions are exposed as labels; StorageGRID only reports controller A.
+    try:
+        res = client.query_metrics(
+            "storagegrid_appliance_storage_controller_firmware_version or "
+            "storagegrid_appliance_storage_controller_nvsram_version")
+        for item in res:
+            m = item["metric"]
+            nid = m.get("node_id", "")
+            if not nid:
+                continue
+            name = m.get("__name__", "")
+            if name.endswith("firmware_version"):
+                fw, osv = m.get("CFW"), m.get("BundleDisplayVersion")
+                if fw or osv:
+                    info.setdefault(nid, {})
+                    if fw:
+                        info[nid]["storage_controller_firmware"] = fw
+                    if osv:
+                        info[nid]["storage_controller_os_version"] = osv
+            elif name.endswith("nvsram_version") and m.get("NVSRAM"):
+                info.setdefault(nid, {})
+                info[nid]["storage_controller_nvsram"] = m["NVSRAM"]
+    except Exception as e:
+        logger.warning("storage controller firmware query failed: %s", e)
+
     return info
 
 

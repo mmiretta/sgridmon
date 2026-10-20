@@ -85,6 +85,14 @@ for _si, (_sname, _ngw, _nsn, _fill, _lat, _ipfx) in enumerate(_SITE_SPECS):
             _node["model"] = "SG1100"
         _node["board_serial"] = f"{_rng.randint(10**11, 10**12 - 1)}"
         _node["chassis_serial"] = f"{_rng.randint(10**9, 10**10 - 1)}"
+        if _ntype == "storageNode":
+            _node["cfw"], _node["sansos"], _node["nvsram"] = _rng.choice([
+                ("08.90.03.00", "11.90R3", "N5700-890834-D02"),
+                ("08.90.03.00", "11.90R3", "N5700-890834-D02"),
+                ("08.90.03.00", "11.90R3", "N5700-890834-D02"),
+                ("08.80.00.00", "11.80", "N5700-880834-D01"),
+                ("08.70.02.00", "11.70.2R1", "N5700-870834-D03"),
+            ])
         _node["bios"] = _rng.choice(["3.9.1", "3.9.2", "4.0.0"])
         NODES.append(_node)
         _IPS[_name] = f"{_ipfx}{10 + _hi}"
@@ -274,6 +282,14 @@ def _instant(promql: str) -> list[dict]:
     if q == "storagegrid_appliance_storage_controller_hardware_sensor":
         return [_v({"node_id": n["id"], "chassis_serial_number": n["chassis_serial"]}, 1)
                 for n in _storage_nodes()]
+    if "storage_controller_firmware_version" in q:
+        out = []
+        for n in _storage_nodes():
+            out.append(_v({"__name__": "storagegrid_appliance_storage_controller_firmware_version",
+                           "node_id": n["id"], "CFW": n["cfw"], "BundleDisplayVersion": n["sansos"]}, 1))
+            out.append(_v({"__name__": "storagegrid_appliance_storage_controller_nvsram_version",
+                           "node_id": n["id"], "NVSRAM": n["nvsram"]}, 1))
+        return out
     if "storagegrid_appliance_shelf_status" in q:
         return [_v({"node_id": n["id"]}, n["shelves"]) for n in _storage_nodes() if n["shelves"]]
 

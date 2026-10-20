@@ -42,7 +42,9 @@ It is a small FastAPI + PostgreSQL app with a framework-free JavaScript front en
   snapshots stored in the database, because StorageGRID doesn't expose bucket metrics
   in Prometheus. CSV export is included.
 - **Hardware inventory.** A sortable, filterable table of every node with model,
-  serials, BIOS, shelves, FQDN and IP, plus CSV export.
+  serials, BIOS, shelves, storage controller firmware, SANtricity OS and NVSRAM
+  versions, FQDN and IP, plus CSV export. StorageGRID only exposes controller A's
+  firmware; controller B is not available without SANtricity's own API.
 - **Users.** Local accounts with `admin` / `viewer` roles, bcrypt-hashed passwords and
   signed session cookies. Admins manage users from the UI.
 

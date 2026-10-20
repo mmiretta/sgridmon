@@ -1659,6 +1659,9 @@ function renderHardware(hw) {
   if (hw.storage_chassis_serial) rows.push(`<div class="hw-row"><span class="label">Storage S/N</span><span class="value">${escHtml(hw.storage_chassis_serial)}</span></div>`);
   if (hw.bios_version)       rows.push(`<div class="hw-row"><span class="label">BIOS</span><span class="value">${escHtml(hw.bios_version)}</span></div>`);
   if (typeof hw.shelf_count === 'number') rows.push(`<div class="hw-row"><span class="label">Shelves</span><span class="value">${hw.shelf_count}</span></div>`);
+  if (hw.storage_controller_firmware) rows.push(`<div class="hw-row"><span class="label">Controller FW (A)</span><span class="value">${escHtml(hw.storage_controller_firmware)}</span></div>`);
+  if (hw.storage_controller_os_version) rows.push(`<div class="hw-row"><span class="label">SANtricity OS</span><span class="value">${escHtml(hw.storage_controller_os_version)}</span></div>`);
+  if (hw.storage_controller_nvsram) rows.push(`<div class="hw-row"><span class="label">NVSRAM</span><span class="value">${escHtml(hw.storage_controller_nvsram)}</span></div>`);
   el('hardware-info').innerHTML = rows.join('') || '<span class="empty-msg">No hardware data available</span>';
 }
 
@@ -2614,6 +2617,9 @@ const INV_COLS = [
   { key: 'storageSerial',  label: 'Storage S/N' },
   { key: 'bios',           label: 'BIOS' },
   { key: 'shelves',        label: 'Shelves' },
+  { key: 'ctrlFw',         label: 'Controller FW (A)' },
+  { key: 'sansOs',         label: 'SANtricity OS' },
+  { key: 'nvsram',         label: 'NVSRAM' },
   { key: 'fqdn',           label: 'FQDN' },
   { key: 'ip',             label: 'IP' },
 ];
@@ -2633,6 +2639,9 @@ function nodeToInvRow(n) {
     storageSerial: hw.storage_chassis_serial || '',
     bios:          hw.bios_version || '',
     shelves:       typeof hw.shelf_count === 'number' ? hw.shelf_count : '',
+    ctrlFw:        hw.storage_controller_firmware || '',
+    sansOs:        hw.storage_controller_os_version || '',
+    nvsram:        hw.storage_controller_nvsram || '',
     fqdn:          n.fqdn || '',
     ip:            n.ip || '',
   };
@@ -2707,6 +2716,9 @@ function renderInventory() {
       <td>${escHtml(r.storageSerial)}</td>
       <td>${escHtml(r.bios)}</td>
       <td style="text-align:right">${escHtml(String(r.shelves))}</td>
+      <td>${escHtml(r.ctrlFw)}</td>
+      <td>${escHtml(r.sansOs)}</td>
+      <td>${escHtml(r.nvsram)}</td>
       <td>${escHtml(r.fqdn)}</td>
       <td>${escHtml(r.ip)}</td>
     </tr>`;
