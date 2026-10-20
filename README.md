@@ -14,6 +14,10 @@ It is a small FastAPI + PostgreSQL app with a framework-free JavaScript front en
 
 ![Site mesh topology](docs/screenshots/01-topology.png)
 
+*Site mesh topology (above) and site columns layout (below), which groups every node into its site.*
+
+![Site columns](docs/screenshots/06-columns.png)
+
 ## Features
 
 - **Live topology graph.** Sites appear as hubs showing their storage fill. Nodes show
