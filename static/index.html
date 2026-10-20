@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>sgridmon</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/style.css?v=2">
+  <link rel="stylesheet" href="/style.css?v=3">
 </head>
 <body>
 
@@ -54,7 +54,7 @@
   </div>
   <button id="tenants-btn" class="icon-btn" title="Tenants storage usage">👥</button>
   <button id="inventory-btn" class="icon-btn" title="Hardware inventory">⊞</button>
-  <button id="settings-btn" class="icon-btn" title="User management" style="display:none">⚙</button>
+  <button id="settings-btn" class="icon-btn" title="Settings" style="display:none">⚙</button>
   <button id="about-btn" class="icon-btn" title="About">?</button>
   <div id="user-menu-wrap">
     <button id="user-menu-btn" title="Account">
@@ -206,23 +206,43 @@
   </div>
 </div>
 
-<!-- User management modal -->
+<!-- Settings modal (configuration + users) -->
 <div id="users-modal" class="hidden">
   <div class="modal-header">
-    <div class="modal-header-title">User management</div>
-    <button id="users-modal-close">✕</button>
+    <div class="modal-header-title">Settings</div>
+    <button id="users-modal-close" title="Close">✕</button>
   </div>
-  <div id="users-list"></div>
-  <div class="users-add">
-    <div class="users-add-title">Add user</div>
-    <div class="users-add-row">
-      <input type="email" id="new-user-email" placeholder="email@example.com">
-      <input type="password" id="new-user-pass" placeholder="password">
-      <select id="new-user-role">
-        <option value="viewer">viewer</option>
-        <option value="admin">admin</option>
-      </select>
-      <button class="btn-primary" id="btn-add-user">Add</button>
+  <div class="settings-tabs" role="tablist">
+    <button class="settings-tab active" data-tab="config" role="tab">Configuration</button>
+    <button class="settings-tab" data-tab="users" role="tab">Users</button>
+  </div>
+
+  <div class="settings-pane" id="settings-pane-config">
+    <div id="settings-form">
+      <div class="empty-msg" style="padding:14px">Loading…</div>
+    </div>
+    <div class="settings-footer">
+      <div id="settings-status" class="settings-status"></div>
+      <div class="settings-footer-actions">
+        <button class="btn-secondary" id="btn-settings-test">Test StorageGRID</button>
+        <button class="btn-primary" id="btn-settings-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-pane hidden" id="settings-pane-users">
+    <div id="users-list"></div>
+    <div class="users-add">
+      <div class="users-add-title">Add user</div>
+      <div class="users-add-row">
+        <input type="email" id="new-user-email" placeholder="email@example.com">
+        <input type="password" id="new-user-pass" placeholder="password">
+        <select id="new-user-role">
+          <option value="viewer">viewer</option>
+          <option value="admin">admin</option>
+        </select>
+        <button class="btn-primary" id="btn-add-user">Add</button>
+      </div>
     </div>
   </div>
 </div>
@@ -329,6 +349,6 @@
 <div id="toast"></div>
 
 <script src="https://unpkg.com/force-graph@1.43.4/dist/force-graph.min.js"></script>
-<script src="/app.js?v=2"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>

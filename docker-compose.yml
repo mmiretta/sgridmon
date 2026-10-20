@@ -1,10 +1,19 @@
 # sgridmon — StorageGRID monitor
 #
-#   cp .env.example .env      # then edit it
 #   docker compose up -d --build
+#
+# Then sign in and open Settings (the gear button) to configure the StorageGRID
+# connection. Settings are stored in /app/config/sgridmon.env inside the
+# container (the "config" volume) and override the environment.
+#
+# A .env file next to this compose file is optional. It sets the bundled
+# PostgreSQL password, the published port, the first admin user and, on the very
+# first start only, seeds the config file (SGRID_URL, SGRID_PASS, ...).
 #
 # Demo without a StorageGRID:  SGRIDMON_DEMO=1 docker compose up -d --build
 services:
+  # Bundled PostgreSQL (recommended). To use an external PostgreSQL instead,
+  # choose it in Settings > Database; this service can then be removed.
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -27,24 +36,36 @@ services:
       db:
         condition: service_healthy
     environment:
+      # Points at the bundled "db" service. A DATABASE_URL saved in the config
+      # file (Settings > Database > External PostgreSQL) takes precedence.
       DATABASE_URL: postgresql+asyncpg://sgridmon:${POSTGRES_PASSWORD:-sgridmon}@db/sgridmon
-      SGRID_URL: ${SGRID_URL:-https://admin01.grid.example.com}
-      SGRID_USER: ${SGRID_USER:-sgridmon}
-      SGRID_PASS: ${SGRID_PASS:-}
-      SGRID_API_VERSION: ${SGRID_API_VERSION:-4}
-      SGRID_VERIFY_TLS: ${SGRID_VERIFY_TLS:-true}
-      SGRID_CA_BUNDLE: ${SGRID_CA_BUNDLE:-}
-      SGRID_PROXY: ${SGRID_PROXY:-}
-      POLL_INTERVAL: ${POLL_INTERVAL:-60}
-      METRICS_INTERVAL: ${METRICS_INTERVAL:-60}
-      BUCKET_POLL_INTERVAL: ${BUCKET_POLL_INTERVAL:-7200}
-      BUCKET_RETENTION_DAYS: ${BUCKET_RETENTION_DAYS:-90}
-      EC_OVERHEAD: ${EC_OVERHEAD:-1.5}
-      SECRET_KEY: ${SECRET_KEY:-}
-      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      SGRIDMON_DEMO: ${SGRIDMON_DEMO:-0}
+      # First admin user, created only while the users table is empty.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      SGRIDMON_DEMO: ${SGRIDMON_DEMO:-0}
+      # Optional: only used to seed the config file on the first start (when
+      # /app/config/sgridmon.env does not exist yet). Edit them in the UI afterwards.
+      SGRID_URL: ${SGRID_URL:-}
+      SGRID_USER: ${SGRID_USER:-}
+      SGRID_PASS: ${SGRID_PASS:-}
+      SGRID_API_VERSION: ${SGRID_API_VERSION:-}
+      SGRID_VERIFY_TLS: ${SGRID_VERIFY_TLS:-}
+      SGRID_CA_BUNDLE: ${SGRID_CA_BUNDLE:-}
+      SGRID_PROXY: ${SGRID_PROXY:-}
+      POLL_INTERVAL: ${POLL_INTERVAL:-}
+      METRICS_INTERVAL: ${METRICS_INTERVAL:-}
+      BUCKET_POLL_INTERVAL: ${BUCKET_POLL_INTERVAL:-}
+      BUCKET_RETENTION_DAYS: ${BUCKET_RETENTION_DAYS:-}
+      EC_OVERHEAD: ${EC_OVERHEAD:-}
+      SECRET_KEY: ${SECRET_KEY:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-}
+    volumes:
+      # Editable configuration file (sgridmon.env), written by Settings in the UI.
+      # To keep it next to this compose file instead, use a bind mount:
+      #   - ./config:/app/config
+      # and make the directory writable by the container user first:
+      #   mkdir -p config && sudo chown 10001 config
+      - config:/app/config
     ports:
       - "${SGRIDMON_BIND:-127.0.0.1}:${SGRIDMON_PORT:-8090}:8000"
     security_opt:
@@ -52,3 +73,4 @@ services:
 
 volumes:
   pgdata:
+  config:

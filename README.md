@@ -82,25 +82,31 @@ It is a small FastAPI + PostgreSQL app with a framework-free JavaScript front en
 | `GET /api/v4/grid/accounts[/{id}[/usage]]` | Tenant names and per-bucket usage |
 
 By default sgridmon makes a few requests every 60 seconds, plus one usage call per
-tenant every 2 hours. You can tune this with the `*_INTERVAL` variables.
+tenant every 2 hours. You can tune this with the `*_INTERVAL` settings.
 
 ## Quick start (Docker)
 
 ```bash
 git clone https://github.com/mmiretta/sgridmon.git
 cd sgridmon
-cp .env.example .env
-$EDITOR .env                 # set SGRID_URL, SGRID_USER, SGRID_PASS, SECRET_KEY, ADMIN_*
+cp .env.example .env         # optional: database password, port, first admin
 docker compose up -d --build
 ```
 
-Open <http://localhost:8090> and sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. That
-first admin is created only when the user table is empty. The first snapshot appears
-after one poll cycle.
+This starts sgridmon and the bundled PostgreSQL (`db` service, recommended). No `.env`
+is required. Open <http://localhost:8090> and sign in:
+
+- with `ADMIN_EMAIL` / `ADMIN_PASSWORD` if you set them in `.env`, or
+- with `admin@example.com` and the random password printed in the log
+  (`docker compose logs app | grep "created admin"`).
+
+That first admin is created only when the user table is empty. Then click the
+**⚙ Settings** button, enter the StorageGRID URL, user and password, use
+**Test StorageGRID** and **Save**. The first snapshot appears after one poll cycle.
 
 The published port listens on `127.0.0.1` by default (`SGRIDMON_BIND`, `SGRIDMON_PORT`).
 To expose sgridmon to other people, put it behind a reverse proxy that terminates TLS
-(Caddy, nginx, Traefik, ...) and set `SESSION_COOKIE_SECURE=true`. The proxy must
+(Caddy, nginx, Traefik, ...) and enable *Secure session cookie*. The proxy must
 forward WebSocket upgrades on `/ws`.
 
 ## Demo mode
@@ -131,10 +137,32 @@ Stop it with `docker compose down` (add `-v` to delete the demo database).
 
 ## Configuration
 
-Everything is set through environment variables. With Docker Compose, put them in
-`.env`. See [`.env.example`](.env.example) for the full annotated list.
+Settings are edited from the web UI: **⚙ Settings → Configuration** (admin users
+only). They are stored in a plain `KEY=value` file:
 
-| Variable | Default | Description |
+- in Docker: `/app/config/sgridmon.env`, on the named volume `config` (see
+  `docker-compose.yml`; a bind mount such as `./config:/app/config` works too, after
+  `chown 10001` on the directory),
+- without Docker: `./config/sgridmon.env`, or the path in `SGRIDMON_CONFIG`.
+
+Precedence is **built-in defaults < environment variables < config file**. On the first
+start, if the file does not exist, it is created from the current effective values, so
+an existing `.env`-based install carries over (a `SECRET_KEY` is generated if none was
+set). The file is written atomically with mode `600`. You can also edit it by hand and
+restart the container.
+
+StorageGRID, polling and display settings are applied immediately when saved. Settings
+marked **restart** (database, session key, secure cookie, demo mode) are stored and take
+effect after `docker compose restart app`. Passwords and keys are never sent back to the
+browser; leave a password field empty to keep the current value.
+
+**Database.** By default sgridmon uses the bundled PostgreSQL container (`db`), and
+Compose passes its URL in `DATABASE_URL`. To use an existing server instead, choose
+*External PostgreSQL* in Settings, fill in host, port, database, user and password, use
+**Test database**, save and restart. Switching back to *Bundled PostgreSQL* removes the
+override. Data is not copied between databases.
+
+| Setting | Default | Description |
 |---|---|---|
 | `SGRID_URL` | `https://admin01.grid.example.com` | Admin Node base URL. Node FQDNs are built as `<node>.<domain of this URL>`. |
 | `SGRID_USER` / `SGRID_PASS` | `sgridmon` / *(empty)* | Grid user used by sgridmon |
@@ -147,13 +175,19 @@ Everything is set through environment variables. With Docker Compose, put them i
 | `BUCKET_POLL_INTERVAL` | `7200` | Seconds between per-bucket usage snapshots |
 | `BUCKET_RETENTION_DAYS` | `90` | How long bucket snapshots are kept |
 | `EC_OVERHEAD` | `1.5` | Physical/logical ratio shown in the tenants table (depends on your ILM policy) |
-| `DATABASE_URL` | `postgresql+asyncpg://sgridmon:sgridmon@localhost/sgridmon` | SQLAlchemy async URL (`sqlite+aiosqlite:///./file.db` also works) |
-| `POSTGRES_PASSWORD` | `sgridmon` | Password for the bundled PostgreSQL (Compose only) |
-| `SECRET_KEY` | *(random)* | Signs session cookies. Set it, or every restart logs everyone out. |
-| `SESSION_COOKIE_SECURE` | `false` | Set to `true` when served over HTTPS |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | *(empty)* | Bootstrap admin, created when there are no users |
-| `SGRIDMON_BIND` / `SGRIDMON_PORT` | `127.0.0.1` / `8090` | Published address and port (Compose only) |
-| `SGRIDMON_DEMO` | `0` | `1` serves the synthetic demo grid |
+| `DATABASE_URL` | bundled `db` service | SQLAlchemy async URL (`sqlite+aiosqlite:///./file.db` also works). Restart. |
+| `SECRET_KEY` | *(generated)* | Signs session cookies. Restart. |
+| `SESSION_COOKIE_SECURE` | `false` | Set to `true` when served over HTTPS. Restart. |
+| `SGRIDMON_DEMO` | `0` | `1` serves the synthetic demo grid. Restart. |
+
+These are read by Docker Compose from `.env` (see [`.env.example`](.env.example)) and are
+not part of the config file:
+
+| Variable | Default | Description |
+|---|---|---|
+| `POSTGRES_PASSWORD` | `sgridmon` | Password for the bundled PostgreSQL |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | *(generated)* | First admin, created when there are no users |
+| `SGRIDMON_BIND` / `SGRIDMON_PORT` | `127.0.0.1` / `8090` | Published address and port |
 
 ## How it works
 
@@ -164,6 +198,7 @@ StorageGRID Admin Node ──(REST + PromQL, API v4)──► sgridmon (FastAPI)
                                                      ├─ charts.py   range queries for the metrics panel (60 s cache)
                                                      ├─ tenants.py  tenant usage + history (60 s cache)
                                                      ├─ buckets.py  per-bucket snapshots → PostgreSQL
+                                                     ├─ settings.py configuration file editor (admin API)
                                                      └─ main.py     REST API, auth, cases, notes, acks, static UI
 Browser ◄──(HTTP + WebSocket)── static/ (index.html, app.js, style.css)
 ```

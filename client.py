@@ -1,6 +1,7 @@
 """Minimal client for the StorageGRID Grid Management API (v4)."""
 import logging
 import ssl
+import threading
 
 import requests
 import urllib3
@@ -129,12 +130,16 @@ class StorageGridClient:
         return resp.json().get("data", {}).get("result", [])
 
 
-def make_client():
-    """Return a new API client: the real one, or the synthetic one in demo mode."""
+def make_client(**overrides):
+    """Return a new API client: the real one, or the synthetic one in demo mode.
+
+    Keyword overrides (base_url, username, ...) replace the configured values;
+    used to test unsaved settings.
+    """
     if config.DEMO:
         import demo
         return demo.DemoClient()
-    return StorageGridClient(
+    kwargs = dict(
         base_url=config.SGRID_URL,
         username=config.SGRID_USER,
         password=config.SGRID_PASS,
@@ -143,3 +148,28 @@ def make_client():
         ca_bundle=config.SGRID_CA_BUNDLE,
         api_version=config.SGRID_API_VERSION,
     )
+    kwargs.update(overrides)
+    return StorageGridClient(**kwargs)
+
+
+# ── Shared client registry ────────────────────────────────────────────────────
+# Each background module keeps its own client (separate HTTP sessions), cached
+# here so that a configuration change can drop them all at once.
+
+_registry: dict[str, "StorageGridClient"] = {}
+_registry_lock = threading.Lock()
+
+
+def get_client(name: str):
+    """Cached client for a module; rebuilt after reset_clients()."""
+    with _registry_lock:
+        c = _registry.get(name)
+        if c is None:
+            c = _registry[name] = make_client()
+        return c
+
+
+def reset_clients() -> None:
+    """Forget every cached client (called after the settings change)."""
+    with _registry_lock:
+        _registry.clear()

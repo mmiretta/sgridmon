@@ -10,17 +10,15 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 import config
-from client import StorageGridClient, make_client
+from client import StorageGridClient, get_client
 from database import AsyncSessionLocal
 from models import BucketSnapshot
 from sqlalchemy import select, delete, and_
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL = config.BUCKET_POLL_INTERVAL      # default: every 2 hours
-RETENTION_DAYS = config.BUCKET_RETENTION_DAYS    # default: 90 days
-
-_client_inst: StorageGridClient | None = None
+# Poll interval and retention are read live from config.BUCKET_POLL_INTERVAL
+# (default: every 2 hours) and config.BUCKET_RETENTION_DAYS (default: 90 days).
 
 # Status of background poll loop, exposed at /api/tenants/buckets/status
 _status: dict = {
@@ -35,10 +33,7 @@ _status: dict = {
 
 
 def _client() -> StorageGridClient:
-    global _client_inst
-    if _client_inst is None:
-        _client_inst = make_client()
-    return _client_inst
+    return get_client("buckets")
 
 
 def _fetch_with_reauth(c: StorageGridClient, path: str, params: dict | None = None):
@@ -104,7 +99,7 @@ async def _poll_all_tenants_once() -> tuple[int, int]:
         await asyncio.sleep(0.15)
 
     # Retention cleanup
-    cutoff = now - timedelta(days=RETENTION_DAYS)
+    cutoff = now - timedelta(days=config.BUCKET_RETENTION_DAYS)
     try:
         async with AsyncSessionLocal() as s:
             await s.execute(delete(BucketSnapshot).where(BucketSnapshot.captured_at < cutoff))
@@ -133,7 +128,7 @@ async def poll_loop():
                 "last_run_duration_s": int((finished - started).total_seconds()),
                 "tenants_polled":      tenants,
                 "buckets_recorded":    buckets,
-                "next_run_est":        (finished + timedelta(seconds=POLL_INTERVAL)).isoformat(),
+                "next_run_est":        (finished + timedelta(seconds=config.BUCKET_POLL_INTERVAL)).isoformat(),
             })
             logger.info("Bucket snapshot poll done: %d tenants, %d buckets in %ss",
                         tenants, buckets, _status["last_run_duration_s"])
@@ -141,7 +136,7 @@ async def poll_loop():
             logger.error("Bucket snapshot poll failed: %s", e)
         finally:
             _status["running"] = False
-        await asyncio.sleep(POLL_INTERVAL)
+        await config.sleep(config.BUCKET_POLL_INTERVAL)
 
 
 def get_status() -> dict:

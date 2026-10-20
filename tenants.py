@@ -6,7 +6,7 @@ Cached for 60 s to avoid hammering the StorageGRID admin API.
 import logging
 import time
 
-from client import StorageGridClient, make_client
+from client import StorageGridClient, get_client
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +27,14 @@ HISTORY_RANGES = {
 }
 
 
+def reset_cache() -> None:
+    """Drop cached results (after the grid connection settings change)."""
+    _cache.update({"data": None, "fetched_at": 0.0})
+    _history_cache.clear()
+
+
 def _client() -> StorageGridClient:
-    if not hasattr(_client, "_inst"):
-        _client._inst = make_client()
-    return _client._inst
+    return get_client("tenants")
 
 
 def _fetch_tenant_names(c: StorageGridClient) -> dict[str, str]:

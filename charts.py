@@ -6,7 +6,7 @@ Pulls history (5 min to 7 days) from StorageGRID's
 import logging
 import time
 
-from client import StorageGridClient, make_client
+from client import StorageGridClient, get_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,13 @@ DEFAULT_RANGE = "24h"
 _cache: dict = {}   # keyed by range string
 
 
+def reset_cache() -> None:
+    """Drop cached results (after the grid connection settings change)."""
+    _cache.clear()
+
+
 def _client() -> StorageGridClient:
-    if not hasattr(_client, "_inst"):
-        _client._inst = make_client()
-    return _client._inst
+    return get_client("charts")
 
 
 def _range_query(c: StorageGridClient, promql: str, start: int, end: int, step: int):

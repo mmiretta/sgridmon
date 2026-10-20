@@ -11,7 +11,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py ./
 COPY static ./static
 
-RUN useradd --system --uid 10001 --home /app sgridmon
+RUN useradd --system --uid 10001 --home /app sgridmon \
+    && mkdir -p /app/config && chown sgridmon /app/config && chmod 700 /app/config
+VOLUME /app/config
 USER sgridmon
 
 EXPOSE 8000

@@ -10,7 +10,7 @@ import math
 from datetime import datetime, timezone
 
 import config
-from client import StorageGridClient, make_client
+from client import StorageGridClient, get_client
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,6 @@ _traffic: dict = {"sites": {}, "last_updated": None}
 _connectivity: dict = {"sites": {}, "pairs": {}, "last_updated": None}
 _storage: dict = {"sites": {}, "last_updated": None}
 
-_client: StorageGridClient | None = None
 
 
 def get_traffic() -> dict:
@@ -34,10 +33,7 @@ def get_storage() -> dict:
 
 
 def _client_instance() -> StorageGridClient:
-    global _client
-    if _client is None:
-        _client = make_client()
-    return _client
+    return get_client("metrics")
 
 
 def _safe_float(v) -> float | None:
@@ -200,9 +196,8 @@ def _fetch_connectivity(c: StorageGridClient, snapshot_getter) -> dict:
 
 async def metrics_loop(snapshot_getter) -> None:
     global _traffic, _connectivity, _storage
-    c = _client_instance()
-
     while True:
+        c = _client_instance()
         try:
             _traffic = await asyncio.to_thread(_fetch_traffic, c)
             logger.info(
@@ -242,4 +237,4 @@ async def metrics_loop(snapshot_getter) -> None:
         except Exception as e:
             logger.error("Connectivity metrics error: %s", e)
 
-        await asyncio.sleep(config.METRICS_INTERVAL)
+        await config.sleep(config.METRICS_INTERVAL)

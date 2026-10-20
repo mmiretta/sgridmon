@@ -4,14 +4,13 @@ import logging
 import socket
 from urllib.parse import urlparse
 from fastapi import WebSocket
-from client import StorageGridClient, make_client
+from client import StorageGridClient, get_client
 import config
 
 logger = logging.getLogger(__name__)
 
 _snapshot: dict = {}
 _clients: set[WebSocket] = set()
-_client: StorageGridClient | None = None
 _ip_cache: dict[str, str] = {}   # fqdn -> resolved IPv4
 
 
@@ -263,9 +262,7 @@ def _fetch_hardware(client: StorageGridClient) -> dict[str, dict]:
 
 
 def _do_poll() -> dict:
-    global _client
-    if _client is None:
-        _client = make_client()
+    _client = get_client("poller")
     topology = _client.get_health_topology()
     node_health = _client.get_node_health()
     alerts = _client.get_alerts()
@@ -318,4 +315,4 @@ async def poll_loop() -> None:
         except Exception as exc:
             logger.error("Poll error: %s", exc)
             await _broadcast({"type": "error", "message": str(exc)})
-        await asyncio.sleep(config.POLL_INTERVAL)
+        await config.sleep(config.POLL_INTERVAL)

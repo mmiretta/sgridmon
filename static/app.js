@@ -2823,17 +2823,299 @@ async function submitChangePassword() {
   showToast('Password updated');
 }
 
-// ── User management modal ────────────────────────────────────────────────────
-async function openUserManagement() {
+// ── Settings modal (configuration + user management) ─────────────────────────
+const SETTINGS_LABELS = {
+  SGRID_URL: 'Admin Node URL',
+  SGRID_USER: 'User',
+  SGRID_PASS: 'Password',
+  SGRID_API_VERSION: 'API version',
+  SGRID_VERIFY_TLS: 'Verify TLS certificate',
+  SGRID_CA_BUNDLE: 'CA bundle path',
+  SGRID_PROXY: 'Proxy',
+  SGRIDMON_DEMO: 'Demo mode',
+  POLL_INTERVAL: 'Topology / health poll (s)',
+  METRICS_INTERVAL: 'Metrics poll (s)',
+  BUCKET_POLL_INTERVAL: 'Bucket usage poll (s)',
+  BUCKET_RETENTION_DAYS: 'Bucket history retention (days)',
+  EC_OVERHEAD: 'Physical / logical ratio',
+  SECRET_KEY: 'Session signing key',
+  SESSION_COOKIE_SECURE: 'Secure session cookie (HTTPS)',
+};
+let _settings = null;
+
+function openSettings(tab = 'config') {
   el('user-menu').classList.add('hidden');
   el('users-modal').classList.remove('hidden');
   el('overlay').classList.add('active');
-  await loadUsers();
+  showSettingsTab(tab);
 }
+
+// Kept for existing callers (user menu "Manage users").
+function openUserManagement() { openSettings('users'); }
 
 function closeUserManagement() {
   el('users-modal').classList.add('hidden');
   el('overlay').classList.remove('active');
+}
+
+function showSettingsTab(tab) {
+  document.querySelectorAll('.settings-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab));
+  el('settings-pane-config').classList.toggle('hidden', tab !== 'config');
+  el('settings-pane-users').classList.toggle('hidden', tab !== 'users');
+  if (tab === 'users') loadUsers();
+  else loadSettings();
+}
+
+function setSettingsStatus(msg, kind = '') {
+  const s = el('settings-status');
+  s.className = 'settings-status' + (kind ? ' ' + kind : '');
+  s.textContent = msg || '';
+}
+
+async function loadSettings() {
+  const form = el('settings-form');
+  setSettingsStatus('');
+  form.innerHTML = '<div class="empty-msg" style="padding:14px">Loading…</div>';
+  try {
+    const r = await fetch('/api/settings');
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+    _settings = await r.json();
+    renderSettings();
+  } catch (e) {
+    form.innerHTML = `<div class="empty-msg" style="padding:14px">Failed to load settings (${escHtml(e.message)})</div>`;
+  }
+}
+
+function settingsInput(f) {
+  const id = 'set-' + f.key;
+  const wrap = document.createElement('div');
+  wrap.className = 'settings-field' + (f.type === 'bool' ? ' bool' : '');
+
+  const label = document.createElement('label');
+  label.htmlFor = id;
+  label.innerHTML = `<span>${escHtml(SETTINGS_LABELS[f.key] || f.key)}</span>` +
+    `<code>${escHtml(f.key)}</code>` +
+    (f.restart_required ? '<span class="settings-badge" title="Applied after restarting the container">restart</span>' : '') +
+    (f.restart_pending ? '<span class="settings-badge warn" title="Saved but not active yet">pending restart</span>' : '');
+
+  let input;
+  if (f.type === 'bool') {
+    input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!f.value;
+  } else {
+    input = document.createElement('input');
+    input.type = f.type === 'secret' ? 'password'
+      : (f.type === 'int' || f.type === 'float') ? 'number' : 'text';
+    if (f.type === 'int') { input.min = '1'; input.step = '1'; }
+    if (f.type === 'float') { input.min = '0'; input.step = '0.1'; }
+    if (f.type === 'secret') {
+      input.value = '';
+      input.autocomplete = 'new-password';
+      input.placeholder = f.set ? '•••••••• (set; leave empty to keep)' : 'not set';
+    } else {
+      input.value = f.value ?? '';
+      if (f.default !== null && f.default !== '' && f.default !== undefined)
+        input.placeholder = String(f.default);
+    }
+  }
+  input.id = id;
+  input.dataset.key = f.key;
+  input.dataset.type = f.type;
+  input.className = 'settings-input';
+
+  const help = document.createElement('div');
+  help.className = 'settings-help';
+  help.textContent = f.description;
+
+  if (f.type === 'bool') {
+    const row = document.createElement('div');
+    row.className = 'settings-bool-row';
+    row.append(input, label);
+    wrap.append(row, help);
+  } else {
+    wrap.append(label, input, help);
+  }
+  return wrap;
+}
+
+function renderDatabaseSection(db) {
+  const sec = document.createElement('fieldset');
+  sec.className = 'settings-group';
+  const ext = db.external || {};
+  sec.innerHTML = `
+    <legend>Database <span class="settings-badge" title="Applied after restarting the container">restart</span>
+      ${db.restart_pending ? '<span class="settings-badge warn">pending restart</span>' : ''}</legend>
+    <label class="settings-radio">
+      <input type="radio" name="db-mode" value="bundled">
+      <div>
+        <div class="settings-radio-title">Bundled PostgreSQL <span class="settings-rec">recommended</span></div>
+        <div class="settings-help">The <code>db</code> container (postgres:16-alpine) started by docker compose,
+          data in the <code>pgdata</code> volume. URL from ${db.bundled_from_env ? 'the environment' : 'the built-in default'}:
+          <code>${escHtml(db.bundled_url)}</code></div>
+      </div>
+    </label>
+    <label class="settings-radio">
+      <input type="radio" name="db-mode" value="external">
+      <div>
+        <div class="settings-radio-title">External PostgreSQL</div>
+        <div class="settings-help">An existing PostgreSQL server. Tables are created on start-up; data is not migrated.</div>
+      </div>
+    </label>
+    <div class="settings-db-ext" id="settings-db-ext">
+      <div class="settings-grid">
+        <div class="settings-field"><label for="db-host"><span>Host</span></label>
+          <input class="settings-input" id="db-host" type="text" placeholder="postgres.example.com"></div>
+        <div class="settings-field"><label for="db-port"><span>Port</span></label>
+          <input class="settings-input" id="db-port" type="number" min="1" max="65535" placeholder="5432"></div>
+        <div class="settings-field"><label for="db-name"><span>Database</span></label>
+          <input class="settings-input" id="db-name" type="text" placeholder="sgridmon"></div>
+        <div class="settings-field"><label for="db-user"><span>User</span></label>
+          <input class="settings-input" id="db-user" type="text" placeholder="sgridmon"></div>
+        <div class="settings-field"><label for="db-pass"><span>Password</span></label>
+          <input class="settings-input" id="db-pass" type="password" autocomplete="new-password"></div>
+      </div>
+    </div>
+    <div class="settings-inline-actions">
+      <button class="btn-secondary" id="btn-settings-test-db" type="button">Test database</button>
+      <span id="settings-db-result" class="settings-status"></span>
+    </div>`;
+  sec.querySelector(`input[name="db-mode"][value="${db.mode}"]`).checked = true;
+  sec.querySelector('#db-host').value = ext.host || '';
+  sec.querySelector('#db-port').value = ext.port || 5432;
+  sec.querySelector('#db-name').value = ext.database || 'sgridmon';
+  sec.querySelector('#db-user').value = ext.user || '';
+  sec.querySelector('#db-pass').placeholder = ext.password_set ? '•••••••• (set; leave empty to keep)' : '';
+  const sync = () => {
+    const external = sec.querySelector('input[name="db-mode"]:checked').value === 'external';
+    sec.querySelector('#settings-db-ext').classList.toggle('hidden', !external);
+  };
+  sec.querySelectorAll('input[name="db-mode"]').forEach(r => r.addEventListener('change', sync));
+  sync();
+  sec.querySelector('#btn-settings-test-db').addEventListener('click', testDatabaseSettings);
+  return sec;
+}
+
+function renderSettings() {
+  const form = el('settings-form');
+  form.innerHTML = '';
+  const info = document.createElement('div');
+  info.className = 'settings-info';
+  info.innerHTML = `Stored in <code>${escHtml(_settings.config_path)}</code>. ` +
+    'Values here override environment variables. Changes are applied immediately, ' +
+    'except those marked <span class="settings-badge">restart</span>.';
+  form.appendChild(info);
+
+  _settings.groups.forEach(g => {
+    if (g.name === 'Database') return;
+    const sec = document.createElement('fieldset');
+    sec.className = 'settings-group';
+    const legend = document.createElement('legend');
+    legend.textContent = g.name;
+    sec.appendChild(legend);
+    const grid = document.createElement('div');
+    grid.className = 'settings-grid';
+    g.fields.forEach(f => grid.appendChild(settingsInput(f)));
+    sec.appendChild(grid);
+    form.appendChild(sec);
+  });
+  form.appendChild(renderDatabaseSection(_settings.database));
+}
+
+function collectSettings() {
+  const values = {};
+  document.querySelectorAll('#settings-form .settings-input[data-key]').forEach(inp => {
+    values[inp.dataset.key] = inp.dataset.type === 'bool' ? inp.checked : inp.value.trim();
+  });
+  return { values, database: collectDatabase() };
+}
+
+function collectDatabase() {
+  const mode = (document.querySelector('input[name="db-mode"]:checked') || {}).value || 'bundled';
+  return {
+    mode,
+    host: el('db-host').value.trim(),
+    port: parseInt(el('db-port').value, 10) || 5432,
+    database: el('db-name').value.trim(),
+    user: el('db-user').value.trim(),
+    password: el('db-pass').value,
+  };
+}
+
+async function saveSettings() {
+  if (!_settings) return;
+  const btn = el('btn-settings-save');
+  btn.disabled = true;
+  setSettingsStatus('Saving…');
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collectSettings()),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    _settings = data;
+    renderSettings();
+    if (data.restart_required && data.restart_required.length) {
+      setSettingsStatus(`Saved. Restart the container to apply: ${data.restart_required.join(', ')} ` +
+        '(docker compose restart app).', 'warn');
+    } else if (data.changed && data.changed.length) {
+      setSettingsStatus(`Saved and applied: ${data.changed.join(', ')}.`, 'ok');
+    } else {
+      setSettingsStatus('Saved. No changes.', 'ok');
+    }
+    showToast('Settings saved');
+  } catch (e) {
+    setSettingsStatus(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function testStorageGridSettings() {
+  const btn = el('btn-settings-test');
+  btn.disabled = true;
+  setSettingsStatus('Connecting to StorageGRID…');
+  try {
+    const r = await fetch('/api/settings/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: collectSettings().values }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    setSettingsStatus(data.message, data.ok ? 'ok' : 'err');
+  } catch (e) {
+    setSettingsStatus(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function testDatabaseSettings() {
+  const out = el('settings-db-result');
+  const btn = el('btn-settings-test-db');
+  btn.disabled = true;
+  out.className = 'settings-status';
+  out.textContent = 'Connecting…';
+  try {
+    const r = await fetch('/api/settings/test-db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(collectDatabase()),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || `HTTP ${r.status}`);
+    out.className = 'settings-status ' + (data.ok ? 'ok' : 'err');
+    out.textContent = data.message;
+  } catch (e) {
+    out.className = 'settings-status err';
+    out.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function loadUsers() {
@@ -3067,7 +3349,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   el('user-menu-manage').addEventListener('click', openUserManagement);
   el('user-menu-change-pwd').addEventListener('click', openChangePassword);
   el('users-modal-close').addEventListener('click', closeUserManagement);
-  el('settings-btn').addEventListener('click', openUserManagement);
+  el('settings-btn').addEventListener('click', () => openSettings('config'));
+  document.querySelectorAll('.settings-tab').forEach(b =>
+    b.addEventListener('click', () => showSettingsTab(b.dataset.tab)));
+  el('btn-settings-save').addEventListener('click', saveSettings);
+  el('btn-settings-test').addEventListener('click', testStorageGridSettings);
   el('inventory-btn').addEventListener('click', openInventory);
   el('inv-modal-close').addEventListener('click', closeInventory);
   el('inv-export').addEventListener('click', exportInventoryCSV);

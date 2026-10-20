@@ -17,6 +17,7 @@ import tenants as tenants_mod
 import charts as charts_mod
 import buckets as buckets_mod
 import auth as auth_mod
+import settings as settings_mod
 from auth import (
     SESSION_COOKIE, hash_password, verify_password, make_session_token,
     get_current_user, require_user, require_admin, bootstrap_admin,
@@ -27,6 +28,7 @@ from models import Base, Case, CaseNote, AlertAck, User, NodeNote
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+logger.info("Configuration file: %s", config.CONFIG_PATH)
 if config.DEMO:
     logger.warning("SGRIDMON_DEMO is enabled: serving a synthetic grid, no StorageGRID is contacted")
 
@@ -46,6 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(settings_mod.router)
 
 
 # ── Auth gate: every /api/* and /ws needs a valid session ────────────────────
